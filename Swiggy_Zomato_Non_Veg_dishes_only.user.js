@@ -57,7 +57,7 @@
         }
         if (newCheckbox.checked) {
           console.debug('enableNonVeg: already non-veg, reset it')
-          resetNonVeg()
+          window.setTimeout(resetNonVeg, 100)
           return
         }
 
@@ -137,7 +137,7 @@
 
         if (newCheckbox.checked) {
           console.debug('enableNonVeg: already non-veg, reset it')
-          resetNonVeg()
+          window.setTimeout(resetNonVeg, 100)
           return
         }
 
