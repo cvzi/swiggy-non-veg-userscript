@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Swiggy & Zomato: Non Veg dishes only
 // @namespace    http://tampermonkey.net/
-// @version      0.3
+// @version      0.4
 // @description  On Swiggy and Zomato you can select to show vegetarian dishes only, this script does the reverse: it allows you to hide vegetarian dishes
 // @author       cuzi
 // @copyright    2021, cuzi (https://openuserjs.org/users/cuzi)
@@ -128,35 +128,37 @@
           menuItem.style.display = ''
         })
         newCheckbox.checked = false
+        newCheckbox.style.backgroundColor = ''
       }
       const enableNonVeg = function (ev) {
         if (ev) {
           ev.preventDefault()
           ev.stopPropagation()
         }
+        newCheckbox.style.backgroundColor = '#87d'
+        window.setTimeout(function () {
+          if (newCheckbox.checked) {
+            console.debug('enableNonVeg: already non-veg, reset it')
+            window.setTimeout(resetNonVeg, 200)
+            return
+          }
 
-        if (newCheckbox.checked) {
-          console.debug('enableNonVeg: already non-veg, reset it')
-          window.setTimeout(resetNonVeg, 100)
-          return
-        }
+          if (orgDiv.checked) {
+            console.debug('enableNonVeg: org checkbox is checked, click it and wait')
+            orgDiv.click()
+            window.setTimeout(enableNonVeg, 500)
+            return
+          }
 
-        if (orgDiv.checked) {
-          console.debug('enableNonVeg: org checkbox is checked, click it and wait')
-          orgDiv.click()
-          window.setTimeout(enableNonVeg, 500)
-          newCheckbox.style.backgroundColor = '#87d'
-          return
-        }
-
-        console.debug('enableNonVeg: hide menu items')
-        document.querySelectorAll('[type="veg"] [type="veg"]').forEach(function (symbol) {
-          const menuItem = symbol.parentNode.parentNode.parentNode.parentNode
-          menuItem.classList.add('hiddenbyscript')
-          menuItem.style.display = 'none'
-        })
-        newCheckbox.checked = true
-        newCheckbox.style.backgroundColor = ''
+          console.debug('enableNonVeg: hide menu items')
+          document.querySelectorAll('[type="veg"] [type="veg"]').forEach(function (symbol) {
+            const menuItem = symbol.parentNode.parentNode.parentNode.parentNode
+            menuItem.classList.add('hiddenbyscript')
+            menuItem.style.display = 'none'
+          })
+          newCheckbox.checked = true
+          newCheckbox.style.backgroundColor = ''
+        }, 100)
       }
       const labels = document.querySelectorAll('label')
       labels.forEach(function (l) {
