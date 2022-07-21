@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Swiggy & Zomato: Non Veg dishes only
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      1.2.0
 // @description  On Swiggy and Zomato you can select to show vegetarian dishes only, this script does the reverse: it allows you to hide vegetarian dishes
 // @author       cuzi
 // @copyright    2021, cuzi (https://openuserjs.org/users/cuzi)
@@ -215,7 +215,7 @@
       return
     }
 
-    const data = JSON.parse(await GM.getValue(gmKey, DEFAULT_DATA))
+    const data = JSON.parse(await GM.getValue(gmKey === 'swiggy' ? 'zomato' : 'swiggy', DEFAULT_DATA))
 
     const results = crossCheckNames(restaurantInfo.name, data)
     showCrossCheckResults(restaurantId, results, gmKey)
