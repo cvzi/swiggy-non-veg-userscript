@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Swiggy & Zomato: Non Veg dishes only
 // @namespace    http://tampermonkey.net/
-// @version      1.2.0
+// @version      1.2.1
 // @description  On Swiggy and Zomato you can select to show vegetarian dishes only, this script does the reverse: it allows you to hide vegetarian dishes
 // @author       cuzi
 // @copyright    2021, cuzi (https://openuserjs.org/users/cuzi)
@@ -99,6 +99,7 @@
 
   function getThumbs (onUpClick, onDownClick) {
     const thumbs = document.createElement('div')
+    thumbs.classList.add('thumbscontainer')
     const thumbUpSVG = document.createElement('div')
     thumbUpSVG.style.width = '40px'
     thumbUpSVG.style.height = '40px'
@@ -336,6 +337,7 @@
 
       `
     }
+    div.classList.remove('fullscreen')
     div.innerHTML = ''
     div.style.display = 'block'
 
@@ -346,6 +348,7 @@
     closeButton.appendChild(document.createTextNode('Close'))
     closeButton.addEventListener('click', function () {
       document.getElementById('cross_check_results').style.display = 'none'
+      showCrossCheckResults(restaurantId, [], gmKey)
     })
     const fullscreenButton = controlsDiv.appendChild(document.createElement('button'))
     fullscreenButton.appendChild(document.createTextNode('\u27F7'))
@@ -463,8 +466,13 @@
         }
 
         const [thumbs, thumbUp, thumbDown] = getThumbs(onUp, onDown)
-        thumbs.style.marginTop = '20pt'
-        menuItem.querySelector('[class*=itemImageContainer]').appendChild(thumbs)
+        const parentContainer = menuItem.querySelector('[class*=itemImageContainer]')
+        thumbs.style.position = 'relative'
+        thumbs.style.zIndex = 10
+        if (parentContainer.className.indexOf('NoImage') === -1) {
+          thumbs.style.marginTop = '20pt'
+        }
+        parentContainer.appendChild(thumbs)
         if (dishName in data.restaurants[restaurantId].dishes) {
           if (data.restaurants[restaurantId].dishes[dishName].rating > 0) {
             thumbUp.querySelector('#skin polygon').setAttribute('fill', '#50c020')
