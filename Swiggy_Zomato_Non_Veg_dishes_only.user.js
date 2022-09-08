@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Swiggy & Zomato: Non Veg dishes only
 // @namespace    http://tampermonkey.net/
-// @version      1.2.2
+// @version      1.2.3
 // @description  On Swiggy and Zomato you can select to show vegetarian dishes only, this script does the reverse: it allows you to hide vegetarian dishes
 // @author       cuzi
 // @copyright    2021, cuzi (https://openuserjs.org/users/cuzi)
@@ -15,6 +15,7 @@
 // @require      https://cdn.jsdelivr.net/npm/string-similarity@4.0.4/umd/string-similarity.min.js
 // @resource     thumbUp https://cdn.jsdelivr.net/npm/openmoji@14.0.0/color/svg/1F44D.svg
 // @resource     thumbDown https://cdn.jsdelivr.net/npm/openmoji@14.0.0/color/svg/1F44E.svg
+// @resource     star https://cdn.jsdelivr.net/npm/openmoji@14.0.0/color/svg/2B50.svg
 // ==/UserScript==
 
 /*
@@ -122,8 +123,39 @@
     return [thumbs, thumbUpSVG, thumbDownSVG]
   }
 
-  async function listRatings (selectedRestaurantId) {
-    const showRestaurantDishes = function (data, listDiv, restaurantId) {
+  function clearAllRatings () {
+    const promises = []
+    for (const gmKey of ['swiggy', 'zomato']) {
+      promises.push(GM.setValue(gmKey, DEFAULT_DATA))
+    }
+    Promise.all(promises).then(() => {
+      window.alert('All ratings cleared\n\nReload the page to see the changes')
+      document.location.reload()
+    })
+  }
+  async function clearRestaurantRatings (node) {
+    const gmKey = node.dataset.gmKey
+    const restaurantId = node.dataset.restaurantId
+    const restaurantName = node.dataset.restaurantName
+
+    if (!gmKey || !restaurantId) {
+      return false
+    }
+
+    if (!window.confirm('Clear all ratings for this restaurant?\n\n' + restaurantName + '\n\nThis cannot be undone!')) {
+      return false
+    }
+
+    const data = JSON.parse(await GM.getValue(gmKey, DEFAULT_DATA))
+    if ((restaurantId in data.restaurants)) {
+      delete data.restaurants[restaurantId]
+    }
+    await GM.setValue(gmKey, JSON.stringify(data))
+    return true
+  }
+
+  async function listRatings (mGmKey, selectedRestaurantId) {
+    const showRestaurantDishes = function (data, listDiv, restaurantId, gmKey) {
       const info = data.restaurants[restaurantId].info
       const dishes = data.restaurants[restaurantId].dishes
       if (!dishes) {
@@ -137,11 +169,25 @@
       ra.href = info.url
       const label = 'name' in info ? info.name : info.url
       ra.appendChild(document.createTextNode(label))
-      if ('location' in info) {
+      if ('location' in info && info.location && info.location.trim()) {
         const span = metaDiv.appendChild(document.createElement('span'))
         span.appendChild(document.createTextNode(` (${info.location})`))
       }
       const lastOverallRatingSpan = metaDiv.appendChild(document.createElement('span'))
+      const clearButton = metaDiv.appendChild(document.createElement('button'))
+      clearButton.style.fontSize = 'small'
+      clearButton.style.marginLeft = '3px'
+      clearButton.addEventListener('click', function () {
+        clearRestaurantRatings(this).then(function (cleared) {
+          if (cleared) {
+            document.location.reload()
+          }
+        })
+      })
+      clearButton.dataset.restaurantId = restaurantId
+      clearButton.dataset.gmKey = gmKey
+      clearButton.dataset.restaurantName = label
+      clearButton.appendChild(document.createTextNode('Clear'))
       const listDivUp = restaDiv.appendChild(document.createElement('div'))
       const listDivDown = restaDiv.appendChild(document.createElement('div'))
       listDivUp.classList.add('ratings_list', 'up')
@@ -180,18 +226,22 @@
       }
     }
 
-    const listDiv = document.getElementById('ratings_container')
+    let listDiv = document.getElementById('ratings_container')
+    if (!listDiv) {
+      createMainContainer(mGmKey, selectedRestaurantId)
+      listDiv = document.getElementById('ratings_container')
+    }
     listDiv.innerHTML = ''
 
     for (const gmKey of ['swiggy', 'zomato']) {
       const data = JSON.parse(await GM.getValue(gmKey, DEFAULT_DATA))
-      if (selectedRestaurantId in data.restaurants) {
+      if (selectedRestaurantId && selectedRestaurantId in data.restaurants) {
         // Show current restaurant first
-        showRestaurantDishes(data, listDiv, selectedRestaurantId)
+        showRestaurantDishes(data, listDiv, selectedRestaurantId, gmKey)
       }
       for (const restaurantId in data.restaurants) {
-        if (selectedRestaurantId !== restaurantId) {
-          showRestaurantDishes(data, listDiv, restaurantId)
+        if (!selectedRestaurantId || selectedRestaurantId !== restaurantId) {
+          showRestaurantDishes(data, listDiv, restaurantId, gmKey)
         }
       }
     }
@@ -219,7 +269,7 @@
     const data = JSON.parse(await GM.getValue(gmKey === 'swiggy' ? 'zomato' : 'swiggy', DEFAULT_DATA))
 
     const results = crossCheckNames(restaurantInfo.name, data)
-    showCrossCheckResults(restaurantId, results, gmKey)
+    showCrossCheckResults(gmKey, restaurantId, results)
   }
 
   function showCrossCheckResultsWide () {
@@ -245,7 +295,35 @@
     `
   }
 
-  function showCrossCheckResults (restaurantId, results, gmKey) {
+  function showCrossCheckResults (gmKey, restaurantId, results) {
+    if (!results.length) {
+      return
+    }
+    const div = createMainContainer(gmKey, restaurantId)
+
+    const resultsHead = div.appendChild(document.createElement('div'))
+    resultsHead.appendChild(document.createTextNode('Similar named restaurants you voted on ' + (gmKey === 'swiggy' ? 'Zomato' : 'Swiggy')))
+    resultsHead.style.fontWeight = 'bold'
+
+    const resultsDiv = div.appendChild(document.createElement('div'))
+    results.forEach(function (restaurant, i) {
+      const restaurantDiv = resultsDiv.appendChild(document.createElement('div'))
+      if (i % 2 === 0) {
+        restaurantDiv.style.backgroundColor = '#ddd'
+      }
+      const restaurantName = restaurantDiv.appendChild(document.createElement('div'))
+      restaurantName.appendChild(document.createTextNode(restaurant.info.name))
+      const restaurantLoc = restaurantDiv.appendChild(document.createElement('div'))
+      restaurantLoc.appendChild(document.createTextNode(restaurant.info.location || ''))
+      restaurantLoc.style.fontSize = '10pt'
+      const restaurantLink = restaurantDiv.appendChild(document.createElement('a'))
+      restaurantLink.appendChild(document.createTextNode(restaurant.info.url))
+      restaurantLink.setAttribute('href', restaurant.info.url)
+      restaurantLink.style.fontSize = '7pt'
+    })
+  }
+
+  function createMainContainer (gmKey = 'swiggy', restaurantId = null, clear = false) {
     let div = document.getElementById('cross_check_results')
     if (!div) {
       div = document.body.appendChild(document.createElement('div'))
@@ -336,53 +414,51 @@
       }
 
       `
+
+      const controlsDiv = div.appendChild(document.createElement('div'))
+      controlsDiv.setAttribute('id', 'controls_container')
+
+      const closeButton = controlsDiv.appendChild(document.createElement('button'))
+      closeButton.appendChild(document.createTextNode('Close'))
+      closeButton.addEventListener('click', function () {
+        removeMainContainer()
+        showCrossCheckResults(gmKey, restaurantId, [])
+      })
+
+      const clearButton = controlsDiv.appendChild(document.createElement('button'))
+      clearButton.appendChild(document.createTextNode('Clear all'))
+      clearButton.addEventListener('click', function () {
+        if (window.confirm('Delete ratings for all restaurants?') && window.confirm('Delete ratings for ALL restaurants?\n\nAre you sure?')) {
+          clearAllRatings()
+        }
+      })
+
+      const fullscreenButton = controlsDiv.appendChild(document.createElement('button'))
+      fullscreenButton.appendChild(document.createTextNode('\u27F7'))
+      fullscreenButton.addEventListener('click', showCrossCheckResultsWide)
+
+      const listDiv = div.appendChild(document.createElement('div'))
+      listDiv.setAttribute('id', 'ratings_container')
+      const listButton = listDiv.appendChild(document.createElement('button'))
+      listButton.appendChild(document.createTextNode('View ratings'))
+      listButton.addEventListener('click', () => listRatings(gmKey, restaurantId))
     }
-    div.classList.remove('fullscreen')
-    div.innerHTML = ''
+
+    if (clear) {
+      div.classList.remove('fullscreen')
+      div.innerHTML = ''
+    }
+
     div.style.display = 'block'
 
-    const controlsDiv = div.appendChild(document.createElement('div'))
-    controlsDiv.setAttribute('id', 'controls_container')
+    return div
+  }
 
-    const closeButton = controlsDiv.appendChild(document.createElement('button'))
-    closeButton.appendChild(document.createTextNode('Close'))
-    closeButton.addEventListener('click', function () {
-      document.getElementById('cross_check_results').style.display = 'none'
-      showCrossCheckResults(restaurantId, [], gmKey)
-    })
-    const fullscreenButton = controlsDiv.appendChild(document.createElement('button'))
-    fullscreenButton.appendChild(document.createTextNode('\u27F7'))
-    fullscreenButton.addEventListener('click', showCrossCheckResultsWide)
-
-    const listDiv = div.appendChild(document.createElement('div'))
-    listDiv.setAttribute('id', 'ratings_container')
-    const listButton = listDiv.appendChild(document.createElement('button'))
-    listButton.appendChild(document.createTextNode('View ratings'))
-    listButton.addEventListener('click', () => listRatings(restaurantId))
-
-    if (!results.length) {
-      return
+  function removeMainContainer () {
+    const div = document.getElementById('cross_check_results')
+    if (div) {
+      div.remove()
     }
-    const resultsHead = div.appendChild(document.createElement('div'))
-    resultsHead.appendChild(document.createTextNode('Similar named restaurants you voted on ' + (gmKey === 'swiggy' ? 'Zomato' : 'Swiggy')))
-    resultsHead.style.fontWeight = 'bold'
-
-    const resultsDiv = div.appendChild(document.createElement('div'))
-    results.forEach(function (restaurant, i) {
-      const restaurantDiv = resultsDiv.appendChild(document.createElement('div'))
-      if (i % 2 === 0) {
-        restaurantDiv.style.backgroundColor = '#ddd'
-      }
-      const restaurantName = restaurantDiv.appendChild(document.createElement('div'))
-      restaurantName.appendChild(document.createTextNode(restaurant.info.name))
-      const restaurantLoc = restaurantDiv.appendChild(document.createElement('div'))
-      restaurantLoc.appendChild(document.createTextNode(restaurant.info.location || ''))
-      restaurantLoc.style.fontSize = '10pt'
-      const restaurantLink = restaurantDiv.appendChild(document.createElement('a'))
-      restaurantLink.appendChild(document.createTextNode(restaurant.info.url))
-      restaurantLink.setAttribute('href', restaurant.info.url)
-      restaurantLink.style.fontSize = '7pt'
-    })
   }
 
   if (document.location.hostname.endsWith('.swiggy.com')) {
@@ -399,6 +475,36 @@
         console.log(e)
       }
       return results
+    }
+    const addRatingsButton = function () {
+      if (document.getElementById('nav_rating_button')) {
+        return
+      }
+      if (document.querySelector('.global-nav a[href*="/support"]')) {
+        const orgLi = document.querySelector('.global-nav a[href*="/support"]').parentNode.parentNode
+        const li = orgLi.cloneNode(true)
+        orgLi.parentNode.appendChild(li)
+        li.setAttribute('id', 'nav_rating_button')
+        li.addEventListener('click', function (ev) {
+          ev.preventDefault()
+          listRatings('swiggy', null)
+        })
+        li.querySelector('a').href = '#'
+        const svg = li.querySelector('svg')
+        const span = svg.parentNode
+        span.parentNode.replaceChild(document.createTextNode('Ratings'), span.nextSibling)
+        const starSVG = document.createElement('div')
+        starSVG.style.width = '22px'
+        starSVG.style.height = '22px'
+        starSVG.style.cursor = 'pointer'
+        starSVG.innerHTML = GM_getResourceText('star').replace('id="emoji"', 'id="starSVG' + Math.random() + '"')
+        starSVG.querySelector('#color polygon').setAttribute('fill', '#ffffff')
+        starSVG.querySelector('#line polygon').setAttribute('stroke', '#3d4152')
+        starSVG.querySelector('#line polygon').setAttribute('stroke-width', '6')
+        span.replaceChild(starSVG, svg)
+      } else if (!document.getElementById('cross_check_results')) {
+        createMainContainer('swiggy', null)
+      }
     }
     const addRatings = async function () {
       const m = document.location.pathname.match(/\/restaurants\/[\w-]+-(\d+)/)
@@ -442,8 +548,8 @@
           if (!(dishName in data.restaurants[restaurantId].dishes)) {
             data.restaurants[restaurantId].dishes[dishName] = {
               name: dishName,
-              price: price,
-              veg: veg,
+              price,
+              veg,
               lastRating: new Date().toJSON().toString()
             }
           }
@@ -561,6 +667,7 @@
       })
     }
     window.setInterval(function () {
+      addRatingsButton()
       addRatings()
       if (!document.getElementById('nonVegToggle')) {
         addNonVegToggle()
@@ -580,6 +687,36 @@
         console.log(e)
       }
       return results
+    }
+    const addRatingsButton = function () {
+      if (document.getElementById('nav_rating_button')) {
+        return
+      }
+      if (document.querySelector('ul[id*=navigation]')) {
+        const orgLi = document.querySelector('ul[id*=navigation]').querySelector('li:last-child')
+        const li = orgLi.cloneNode(true)
+        orgLi.parentNode.appendChild(li)
+        li.setAttribute('id', 'nav_rating_button')
+        li.addEventListener('click', function (ev) {
+          ev.preventDefault()
+          listRatings('zomato', null)
+        })
+        const a = li.querySelector('a')
+        a.innerHTML = ''
+        a.style.fontSize = '10px'
+        const starSVG = document.createElement('div')
+        starSVG.style.width = '22px'
+        starSVG.style.height = '22px'
+        starSVG.style.cursor = 'pointer'
+        starSVG.style.margin = 'auto'
+        starSVG.style.marginTop = '-35px'
+        starSVG.innerHTML = GM_getResourceText('star').replace('id="emoji"', 'id="starSVG' + Math.random() + '"')
+        starSVG.querySelector('#color polygon').setAttribute('fill', '#EF4F5F')
+        a.appendChild(starSVG)
+        a.appendChild(document.createTextNode('Ratings'))
+      } else if (!document.getElementById('cross_check_results')) {
+        createMainContainer('zomato', null)
+      }
     }
     const addRatings = async function () {
       const m = document.location.pathname.match(/([\w-]+\/[\w-]+)\/order/)
@@ -620,8 +757,8 @@
           if (!(dishName in data.restaurants[restaurantId].dishes)) {
             data.restaurants[restaurantId].dishes[dishName] = {
               name: dishName,
-              price: price,
-              veg: veg, // "veg", "nonveg"
+              price,
+              veg, // "veg", "nonveg"
               lastRating: new Date().toJSON().toString()
             }
           }
@@ -731,6 +868,7 @@
       })
     }
     window.setInterval(function () {
+      addRatingsButton()
       addRatings()
       if (!document.getElementById('nonVegToggle')) {
         addNonVegToggle()
