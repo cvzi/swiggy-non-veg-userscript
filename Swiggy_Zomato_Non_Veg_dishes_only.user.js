@@ -2,7 +2,7 @@
 // @name         Swiggy & Zomato: Non Veg dishes only
 // @namespace    http://tampermonkey.net/
 // @version      1.2.3
-// @description  On Swiggy and Zomato you can select to show vegetarian dishes only, this script does the reverse: it allows you to hide vegetarian dishes
+// @description  On Swiggy and Zomato you can select to show vegetarian dishes only, this script does the reverse: it allows you to hide vegetarian dishes. Rate individual dishes and keep a private history of what you like and what you hated
 // @author       cuzi
 // @copyright    2021, cuzi (https://openuserjs.org/users/cuzi)
 // @license      GPL-3.0-or-later
