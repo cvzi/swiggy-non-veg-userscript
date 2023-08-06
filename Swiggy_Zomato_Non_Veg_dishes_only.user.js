@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Swiggy & Zomato: Non Veg dishes only
 // @namespace    http://tampermonkey.net/
-// @version      1.2.4
+// @version      1.2.5
 // @description  On Swiggy and Zomato you can select to show vegetarian dishes only, this script does the reverse: it allows you to hide vegetarian dishes. Rate individual dishes and keep a private history of what you like and what you hated
 // @author       cuzi
 // @copyright    2021, cuzi (https://openuserjs.org/users/cuzi)
@@ -594,12 +594,11 @@
       })
     }
     const addNonVegToggle = function () {
-      let label
       let orgDiv
       let newDiv
-      let newCheckbox
+      let isActive
       const orgClick = function () {
-        if (newCheckbox.checked) {
+        if (isActive) {
           console.debug('orgClick: already non-veg, reset it')
           resetNonVeg()
         }
@@ -609,60 +608,54 @@
           menuItem.classList.remove('hiddenbyscript')
           menuItem.style.display = ''
         })
-        newCheckbox.checked = false
+        isActive = false
+        newDiv.querySelector('[class*="ToggleSwitch_toggleBar"]').style.backgroundColor = ''
+        newDiv.querySelector('[class*="ToggleSwitch_toggleThumb"]').style.backgroundColor = ''
+        newDiv.querySelector('[class*="ToggleSwitch_toggleThumb"]').style.transform = ''
       }
       const enableNonVeg = function (ev) {
         if (ev) {
           ev.preventDefault()
           ev.stopPropagation()
         }
-        if (newCheckbox.checked) {
+        if (isActive) {
           console.debug('enableNonVeg: already non-veg, reset it')
           window.setTimeout(resetNonVeg, 100)
           return
         }
 
-        if (orgDiv.querySelector('input[type=checkbox]').checked) {
+        if (orgDiv.querySelector('[class*="toggleThumbActive"]')) {
           console.debug('enableNonVeg: org checkbox is checked, click it and wait')
-          orgDiv.querySelector('input[type=checkbox]').click()
+          orgDiv.querySelector('button').click()
           window.setTimeout(enableNonVeg, 500)
-          newDiv.querySelector('label').style.backgroundColor = '#87d'
+          newDiv.querySelector('[class*="ToggleSwitch_toggleBar"]').style.backgroundColor = '#87d'
           return
         }
 
         console.debug('enableNonVeg: hide menu items')
-        document.querySelectorAll('[itemtype="http://schema.org/MenuItem"]').forEach(function (menuItem) {
+        document.querySelectorAll('[data-testid*="dish-item"]').forEach(function (menuItem) {
           const icon = menuItem.querySelector('[class*=styles_icon]')
           if (icon && icon.className.match(/icon-?veg/i)) {
             menuItem.classList.add('hiddenbyscript')
             menuItem.style.display = 'none'
           }
         })
-        newCheckbox.checked = true
-        newDiv.querySelector('label').style.backgroundColor = ''
+        isActive = true
+        newDiv.querySelector('[class*="ToggleSwitch_toggleBar"]').style.backgroundColor = '#e43b4f'
+        newDiv.querySelector('[class*="ToggleSwitch_toggleThumb"]').style.backgroundColor = '#e43b4f'
+        newDiv.querySelector('[class*="ToggleSwitch_toggleThumb"]').style.transform = 'translate3d(18px,0,0)'
       }
-      const labels = document.querySelectorAll('label')
-      labels.forEach(function (l) {
-        if (l.textContent.toLowerCase().indexOf('veg') !== -1 && l.textContent.toLowerCase().indexOf('only') !== -1) {
-          label = l
-          orgDiv = label.firstElementChild
-          newDiv = orgDiv.cloneNode(true)
-          label.appendChild(newDiv)
-          label.parentNode.style.width = (label.parentNode.clientWidth + newDiv.clientWidth + 17) + 'px'
-          if (newDiv.tagName === 'INPUT') {
-            newCheckbox = newDiv
-          } else {
-            newCheckbox = newDiv.querySelector('input[type=checkbox]')
-          }
-          newCheckbox.checked = false
+      const labels = document.querySelectorAll('[data-testid*="filter-switch"]')
+      labels.forEach(function (label) {
+        if (label.className.indexOf('vegOnly') !== -1) {
+          orgDiv = label
+          orgDiv.parentNode.style.justifyContent = 'flex-start'
+          newDiv = orgDiv.parentNode.appendChild(label.cloneNode(true))
+          newDiv.style.marginLeft = '1em'
           newDiv.setAttribute('id', 'nonVegToggle')
-          newDiv.querySelectorAll('span').forEach(function (span) {
-            if (span.firstChild && span.firstChild.nodeType === Node.TEXT_NODE && span.textContent.toLowerCase().indexOf('veg') !== -1) {
-              span.innerHTML = 'Non veg'
-            }
-          })
-          newDiv.addEventListener('click', enableNonVeg)
-          orgDiv.addEventListener('click', orgClick)
+          newDiv.querySelector('[class*="Label_"]').textContent = 'Non veg'
+          newDiv.querySelector('button').addEventListener('click', enableNonVeg)
+          orgDiv.querySelector('button').addEventListener('click', orgClick)
         }
       })
     }
