@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Swiggy & Zomato: Non Veg dishes only
 // @namespace    http://tampermonkey.net/
-// @version      1.2.3
+// @version      1.2.4
 // @description  On Swiggy and Zomato you can select to show vegetarian dishes only, this script does the reverse: it allows you to hide vegetarian dishes. Rate individual dishes and keep a private history of what you like and what you hated
 // @author       cuzi
 // @copyright    2021, cuzi (https://openuserjs.org/users/cuzi)
@@ -465,12 +465,12 @@
     let crossCheckDone = false
     const getRestaurantInfo = function () {
       const results = {}
-      const h1 = document.querySelector('div#root h1')
+      const h1 = document.querySelector('[class*="RestaurantNameAddress_name"]')
       if (h1) {
         results.name = h1.textContent.trim()
       }
       try {
-        results.location = h1.parentNode.parentNode.nextElementSibling.nextElementSibling.firstChild.nextElementSibling.textContent.trim()
+        results.location = document.querySelector('[class*="RestaurantNameAddress_area"]').textContent.trim()
       } catch (e) {
         console.log(e)
       }
@@ -523,7 +523,7 @@
         crossCheck(restaurantId, getRestaurantInfo(), 'swiggy')
       }
 
-      document.querySelectorAll('[itemtype="http://schema.org/MenuItem"]').forEach(function (menuItem) {
+      document.querySelectorAll('[data-testid*="dish-item"]').forEach(function (menuItem) {
         if ('userscriptprocessed' in menuItem.dataset) {
           return
         }
